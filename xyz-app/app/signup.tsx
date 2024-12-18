@@ -130,14 +130,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   button: {
-    backgroundColor: '#10b981',
-    paddingVertical: 15,
-    paddingHorizontal: 30,
+    padding: 12,
+    backgroundColor: '#10b981', // Custom theme color
     borderRadius: 8,
+    marginVertical: 10,
+    width: '100%',
+    alignItems: 'center',
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 16,
+    color: '#ffffff',
+    fontSize: 18,
     fontWeight: 'bold',
   },
 });
