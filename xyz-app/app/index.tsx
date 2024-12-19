@@ -7,12 +7,12 @@ import {
     StyleSheet,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 
 const LoginScreen: React.FC = () => {
     const [username, setUsername] = useState<string>('');
     const [password, setPassword] = useState<string>('');
-    const navigation = useNavigation();
+    const router = useRouter(); // Use the router instead of navigation
 
     const submitLoginForm = async () => {
         if (!username || !password) {
@@ -42,7 +42,7 @@ const LoginScreen: React.FC = () => {
                     text1: 'Login Successful',
                     text2: `Welcome back, ${userData.user_name}!`,
                 });
-                navigation.navigate('reports'); // Replace with your target screen
+                router.push('/(drawer)/capture'); // Navigate to the drawer route
             } else {
                 const errorData = await response.json();
                 Toast.show({
@@ -79,12 +79,20 @@ const LoginScreen: React.FC = () => {
                 onChangeText={setPassword}
             />
 
-            <TouchableOpacity onPress={() => navigation.navigate('signup')}>
+            <TouchableOpacity onPress={() => router.push('/signup')}>
                 <Text style={styles.link}>Register Account?</Text>
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/help')}>
+                <Text style={styles.link}>Help</Text>
+            </TouchableOpacity>
 
-
-            <TouchableOpacity style={styles.button} onPress={submitLoginForm}>
+            <TouchableOpacity
+                style={styles.button}
+                onPress={() => {
+                    console.log('Navigating to (drawer)/capture');
+                    router.push('/(drawer)/capture');
+                }}
+            >
                 <Text style={styles.buttonText}>Sign in</Text>
             </TouchableOpacity>
 
@@ -126,7 +134,7 @@ const styles = StyleSheet.create({
     },
     button: {
         padding: 12,
-        backgroundColor: '#10b981', // Custom theme color
+        backgroundColor: '#10b981',
         borderRadius: 8,
         marginVertical: 10,
         width: '100%',

@@ -7,13 +7,13 @@ import {
   StyleSheet,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router'; // Import useRouter
 
 const RegisterScreen: React.FC = () => {
   const [username, setUsername] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
-  const navigation = useNavigation();
+  const router = useRouter(); // Use router for navigation
 
   const submitRegisterForm = async () => {
     if (!username || !email || !password) {
@@ -40,7 +40,7 @@ const RegisterScreen: React.FC = () => {
           text1: 'Registration Successful',
           text2: 'Please go to the login page.',
         });
-        navigation.navigate('index');
+        router.push('/'); // Use router.push to navigate to the index/login screen
       } else {
         const errorData = await response.json();
         Toast.show({
@@ -83,10 +83,6 @@ const RegisterScreen: React.FC = () => {
         value={password}
         onChangeText={setPassword}
       />
-
-      <TouchableOpacity onPress={() => navigation.navigate('index')}>
-        <Text style={styles.link}>Login?</Text>
-      </TouchableOpacity>
 
       <TouchableOpacity style={styles.button} onPress={submitRegisterForm}>
         <Text style={styles.buttonText}>Register</Text>

@@ -47,9 +47,6 @@ const HelpScreen = () => {
 
     return (
         <ScrollView style={styles.container}>
-            <Text style={styles.link} onPress={() => Linking.openURL('https://www.example.com/login')}>
-                /Login
-            </Text>
             <View style={styles.faq}>
                 {faqs.map((faq, index) => (
                     <View key={index} style={styles.question}>
