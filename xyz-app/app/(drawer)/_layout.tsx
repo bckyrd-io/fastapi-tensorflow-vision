@@ -57,7 +57,7 @@ export default function DrawerLayout() {
                     component={CaptureScreen}
                     options={{
                         drawerIcon: ({ color }) => (
-                            <Ionicons name="camera-outline" size={22} color={color} />
+                            <Ionicons name="image-outline" size={20} color={color} />
                         ),
                     }}
                 />
@@ -66,7 +66,7 @@ export default function DrawerLayout() {
                     component={AnalysisScreen}
                     options={{
                         drawerIcon: ({ color }) => (
-                            <Ionicons name="bar-chart-outline" size={22} color={color} />
+                            <Ionicons name="pie-chart-outline" size={20} color={color} />
                         ),
                     }}
                 />
@@ -75,7 +75,7 @@ export default function DrawerLayout() {
                     component={TrainScreen}
                     options={{
                         drawerIcon: ({ color }) => (
-                            <Ionicons name="toggle-outline" size={22} color={color} />  
+                            <Ionicons name="options-outline" size={20} color={color} />  
                         ),
                     }}
                 />
@@ -84,7 +84,7 @@ export default function DrawerLayout() {
                     component={ReportsScreen}
                     options={{
                         drawerIcon: ({ color }) => (
-                            <Ionicons name="document-text-outline" size={22} color={color} />
+                            <Ionicons name="document-text-outline" size={20} color={color} />
                         ),
                     }}
                 />
@@ -93,7 +93,7 @@ export default function DrawerLayout() {
                     component={UsersScreen}
                     options={{
                         drawerIcon: ({ color }) => (
-                            <Ionicons name="people-outline" size={22} color={color} />
+                            <Ionicons name="people-outline" size={20} color={color} />
                         ),
                     }}
                 />

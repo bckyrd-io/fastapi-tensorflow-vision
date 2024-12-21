@@ -29,7 +29,7 @@ const LoginScreen: React.FC = () => {
         formData.append('password', password);
 
         try {
-            const response = await fetch('http://localhost:8000/login', {
+            const response = await fetch('http://192.168.13.40:8000/login', {
                 method: 'POST',
                 body: formData,
             });
@@ -86,13 +86,7 @@ const LoginScreen: React.FC = () => {
                 <Text style={styles.link}>Help</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-                style={styles.button}
-                onPress={() => {
-                    console.log('Navigating to (drawer)/capture');
-                    router.push('/(drawer)/capture');
-                }}
-            >
+            <TouchableOpacity style={styles.button} onPress={submitLoginForm}>
                 <Text style={styles.buttonText}>Sign in</Text>
             </TouchableOpacity>
 

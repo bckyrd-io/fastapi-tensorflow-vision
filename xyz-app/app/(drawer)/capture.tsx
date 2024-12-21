@@ -134,9 +134,9 @@ const CaptureScreen: React.FC<CaptureScreenProps> = () => {
     <ScrollView contentContainerStyle={styles.container}>
       <CameraView style={styles.camera} facing={cameraType}>
         <View style={styles.controls}>
-          <TouchableOpacity onPress={toggleCameraType} style={styles.button}>
+          {/* <TouchableOpacity onPress={toggleCameraType} style={styles.button}>
             <Text style={styles.buttonText}>Flip Camera</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
           <TouchableOpacity onPress={handleCapturePhoto} style={styles.button}>
             <Text style={styles.buttonText}>Capture Photo</Text>
           </TouchableOpacity>

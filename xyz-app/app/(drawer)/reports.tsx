@@ -15,7 +15,9 @@ import { useNavigation } from '@react-navigation/native';
 interface PlantData {
   day: string;
   plant_count: number;
+  
 }
+
 
 const ReportsScreen: React.FC = () => {
   const [chartData, setChartData] = useState<PlantData[]>([]);
@@ -100,12 +102,17 @@ const ReportsScreen: React.FC = () => {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.listItem}
-              onPress={() =>
-                navigation.navigate('PlantReportScreen', { plantName: item })
-              }
             >
               <Text style={styles.listItemText}>{item}</Text>
             </TouchableOpacity>
+            // <TouchableOpacity
+            //   style={styles.listItem}
+            //   onPress={() =>
+            //     navigation.navigate('PlantReportScreen', { plantName: item })
+            //   }
+            // >
+            //   <Text style={styles.listItemText}>{item}</Text>
+            // </TouchableOpacity>
           )}
         />
       </View>
