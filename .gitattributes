@@ -1,0 +1,9 @@
+# Ignore TypeScript files from language stats
+*.ts linguist-vendored
+*.tsx linguist-vendored
+
+# Ignore whole frontend/app directory
+xyz-app/** linguist-vendored
+
+# Explicitly mark Python as main language
+*.py linguist-language=Python
