@@ -38,6 +38,9 @@ yarn-error.*
 *.ts linguist-vendored
 *.tsx linguist-vendored
 
+xyz-app/* linguist-vendored
+
+
 *.py linguist-language=Python
 
 app-example
