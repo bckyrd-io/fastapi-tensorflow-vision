@@ -35,5 +35,8 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+*.ts linguist-vendored
+*.tsx linguist-vendored
+
 
 app-example
