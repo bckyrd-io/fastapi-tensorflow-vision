@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: zonematrix-api
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    preDeployCommand: "python init_db.py"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DATABASE_URL
+        fromDatabase:
+          name: zonematrix-db
+          property: connectionString
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+
+databases:
+  - name: zonematrix-db
+    plan: free
+    region: oregon
+    databaseName: db_zone
+    user: postgres
+

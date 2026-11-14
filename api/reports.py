@@ -1,4 +1,4 @@
-"""Report statistics route - port of green-matrix/app/api/reports/stats/route.ts."""
+"""Report statistics route for ZoneMatrix."""
 
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ async def report_stats(request: Request):
               ROUND(MIN(water_level), 2) as min_water_level,
               ROUND(MAX(water_level), 2) as max_water_level,
               COUNT(*) as total_readings,
-              COUNT(DISTINCT pond_id) as pond_count
+              COUNT(DISTINCT zone_id) as zone_count
             FROM sensor_readings
             WHERE reading_time > NOW() - (? * INTERVAL '1 hour')
               AND temperature IS NOT NULL
@@ -127,7 +127,7 @@ async def report_stats(request: Request):
             },
             "summary": {
                 "totalReadings": _value(stats, "total_readings"),
-                "pondCount": _value(stats, "pond_count"),
+                "zoneCount": _value(stats, "zone_count"),
                 "hours": hours,
             },
             "generatedAt": _now_iso(),

@@ -54,7 +54,13 @@ function RootNavigator() {
         <Stack.Screen name="(app)" />
       </Stack.Protected>
 
-      <Stack.Protected guard={!isAuthenticated}>
+      {/*
+       * `redirectTo` is required: when these screens are excluded, the
+       * fallback would otherwise be the pathless `(app)` group itself, which
+       * is not a real path ("Unmatched Route" at /(app)).
+       * `launcher` picks the role-appropriate screen once the group mounts.
+       */}
+      <Stack.Protected guard={!isAuthenticated} redirectTo="/launcher">
         <Stack.Screen name="index" />
         <Stack.Screen name="register" />
       </Stack.Protected>

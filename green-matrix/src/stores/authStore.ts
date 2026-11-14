@@ -28,7 +28,7 @@ interface AuthState {
   hydrated: boolean;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   setUser: (user: User) => void;
   /** Read persisted session; call once from the root layout. */
   hydrate: () => Promise<void>;
@@ -61,12 +61,13 @@ export const useAuthStore = create<AuthState>((set) => ({
           lastLogin: new Date().toISOString(),
         };
 
-        set({ user, isAuthenticated: true, isLoading: false });
-
         await AsyncStorage.multiSet([
           [USER_KEY, JSON.stringify(user)],
           [TOKEN_KEY, data.token ?? ''],
         ]);
+        // Change the route guard only after the session is persisted so a
+        // fast navigation or app restart cannot race storage hydration.
+        set({ user, isAuthenticated: true, isLoading: false });
 
         return true;
       }
@@ -80,9 +81,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  logout: () => {
+  logout: async () => {
     set({ user: null, isAuthenticated: false });
-    AsyncStorage.multiRemove([USER_KEY, TOKEN_KEY]);
+    try {
+      await AsyncStorage.multiRemove([USER_KEY, TOKEN_KEY]);
+    } catch (error) {
+      console.error('Failed to clear persisted session:', error);
+    }
     // Best-effort server-side logout (same as the old app).
     apiFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
   },

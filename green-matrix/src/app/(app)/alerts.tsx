@@ -14,11 +14,11 @@ import { apiFetch, ApiError } from '@/lib/api';
 
 interface Alert {
   id: number;
-  pond_id: string;
-  pond_name: string;
+  zone_id: string;
+  zone_name: string;
   type: 'critical' | 'warning' | 'info';
   message: string;
-  source: 'feeding' | 'sensor' | 'config' | 'user' | 'system';
+  source: 'trigger' | 'sensor' | 'config' | 'user' | 'system';
   status: 'active' | 'inactive';
   value: number | null;
   parameter: string | null;
@@ -110,7 +110,7 @@ export default function AlertsScreen() {
 
   const getSourceLabel = (source: string) => {
     const labels: Record<string, string> = {
-      feeding: 'Feeding',
+      trigger: 'Trigger',
       sensor: 'Sensor',
       config: 'Configuration',
       user: 'User',
@@ -197,7 +197,7 @@ export default function AlertsScreen() {
             >
               <Badge variant={getBadgeVariant(item.type)}>{capitalize(item.type)}</Badge>
               <Text style={{ fontSize: t.fontSize.sm, color: t.colors.mutedForeground }}>
-                {item.pond_name || item.pond_id}
+                {item.zone_name || item.zone_id}
               </Text>
               <Badge variant="outline">{getSourceLabel(item.source)}</Badge>
             </View>

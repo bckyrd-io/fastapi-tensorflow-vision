@@ -1,7 +1,7 @@
 /**
- * GreenMatrix logo — a 2x2 matrix of four glowing green cells on a dark tile.
- * Replaces the old fish/leaf icons (Beto: a real component beats a glyph
- * when it is the brand mark).
+ * ZoneMatrix logo — a 2x2 matrix of four glowing green cells on a dark tile.
+ * Replaces the old fish/leaf icons (a real component beats a glyph when it is
+ * the brand mark).
  */
 import { View } from 'react-native';
 
@@ -19,7 +19,7 @@ export function Logo({ size = 48, style }: { size?: number; style?: Parameters<t
   return (
     <View
       accessibilityRole="image"
-      accessibilityLabel="GreenMatrix logo"
+      accessibilityLabel="ZoneMatrix logo"
       style={[
         {
           width: size,

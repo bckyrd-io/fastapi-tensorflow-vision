@@ -1,4 +1,4 @@
-"""Alert routes - port of green-matrix/app/api/alerts/route.ts."""
+"""Alert routes for ZoneMatrix."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 
 ALERT_COLUMNS = """
     a.id,
-    a.pond_id,
+    a.zone_id,
     a.type,
     a.message,
     a.source,
@@ -22,12 +22,13 @@ ALERT_COLUMNS = """
     a.acknowledged_by,
     a.acknowledged_at,
     a.created_at,
-    p.name as pond_name
+    z.name as zone_name
 """
 
 
 class AlertBody(BaseModel):
-    pond_id: str | None = None
+    zone_id: str | None = None
+    zoneId: str | None = None
     type: str | None = "info"
     message: str | None = None
     source: str | None = "system"
@@ -47,11 +48,11 @@ async def list_alerts(request: Request):
     status = params.get("status") or "active"
     source = params.get("source")
     alert_type = params.get("type")
-    pond_id = params.get("pond_id")
+    zone_id = params.get("zone_id") or params.get("zoneId")
     limit = int(params.get("limit") or 50)
 
     try:
-        sql = f"SELECT {ALERT_COLUMNS} FROM alerts a LEFT JOIN ponds p ON a.pond_id = p.id WHERE a.status = ?"
+        sql = f"SELECT {ALERT_COLUMNS} FROM alerts a LEFT JOIN zones z ON a.zone_id = z.id WHERE a.status = ?"
         values: list = [status]
 
         if source:
@@ -60,9 +61,9 @@ async def list_alerts(request: Request):
         if alert_type:
             sql += " AND a.type = ?"
             values.append(alert_type)
-        if pond_id:
-            sql += " AND a.pond_id = ?"
-            values.append(pond_id)
+        if zone_id:
+            sql += " AND a.zone_id = ?"
+            values.append(zone_id)
 
         sql += " ORDER BY a.created_at DESC LIMIT ?"
         values.append(limit)
@@ -103,10 +104,10 @@ async def create_alert(body: AlertBody):
             return api_error(400, "Message is required")
 
         result = db.execute(
-            "INSERT INTO alerts (pond_id, type, message, source, value, parameter, status, created_at) "
+            "INSERT INTO alerts (zone_id, type, message, source, value, parameter, status, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?, 'active', NOW())",
             [
-                body.pond_id or None,
+                body.zone_id or body.zoneId or None,
                 body.type or "info",
                 body.message,
                 body.source or "system",
@@ -147,7 +148,7 @@ async def acknowledge_alert(body: AckBody):
 async def acknowledge_all(request: Request):
     """DELETE /api/alerts - mark every active alert as read."""
     acknowledged_by = request.query_params.get("user") or "system"
-    pond_id = request.query_params.get("pond_id")
+    zone_id = request.query_params.get("zone_id") or request.query_params.get("zoneId")
 
     try:
         sql = (
@@ -155,9 +156,9 @@ async def acknowledge_all(request: Request):
             "WHERE status = 'active'"
         )
         values: list = [acknowledged_by]
-        if pond_id:
-            sql += " AND pond_id = ?"
-            values.append(pond_id)
+        if zone_id:
+            sql += " AND zone_id = ?"
+            values.append(zone_id)
 
         result = db.execute(sql, values)
         return {

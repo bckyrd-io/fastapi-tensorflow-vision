@@ -1,4 +1,4 @@
-"""Shared helpers for the AquaMonitor FastAPI routes."""
+"""Shared helpers for the ZoneMatrix FastAPI routes."""
 
 from __future__ import annotations
 

@@ -24,13 +24,12 @@ interface NavItem {
 
 /** Same order + labels as the old sidebar (navMain array). */
 const NAV_ITEMS: (NavItem & { adminOnly?: boolean })[] = [
-  { title: 'Dashboard', url: '/dashboard', icon: 'bar-chart-outline' },
+  { title: 'Dashboard', url: '/dashboard', icon: 'layers-outline' },
+  { title: 'Capture', url: '/vision', icon: 'scan-outline' },
   { title: 'Monitoring', url: '/monitoring', icon: 'pulse-outline' },
-  { title: 'Trigger', url: '/feeding', icon: 'restaurant-outline' },
-  { title: 'Zones', url: '/ponds', icon: 'water-outline', adminOnly: true },
-  { title: 'Configuration', url: '/pond-config', icon: 'settings-outline', adminOnly: true },
-  { title: 'Reports', url: '/reports', icon: 'document-text-outline' },
-  { title: 'Alerts', url: '/alerts', icon: 'notifications-outline' },
+  { title: 'Trigger', url: '/triggers', icon: 'navigate-outline' },
+  { title: 'Zone', url: '/zones', icon: 'trail-sign-outline', adminOnly: true },
+  { title: 'Alert', url: '/alerts', icon: 'notifications-outline' },
   { title: 'Usage', url: '/usage', icon: 'people-outline', adminOnly: true },
 ];
 
@@ -40,9 +39,25 @@ export function AppDrawerContent(props: DrawerContentComponentProps) {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
 
+  /**
+   * Close the drawer.
+   *
+   * Expo Router's standard drawer router only handles the CLOSE_DRAWER action
+   * when it is targeted at the drawer's own state key. It also has to run
+   * synchronously: `dispatch()` queues the action, so logging out in the same
+   * tick unmounts the drawer before the action is handled and logs
+   * "The action 'CLOSE_DRAWER' was not handled by any navigator".
+   */
+  const closeDrawer = () => {
+    props.navigation.dispatchSync({
+      type: 'CLOSE_DRAWER',
+      target: props.state.key,
+    } as never);
+  };
+
   const navigate = (url: string) => {
     Haptics.light();
-    props.navigation.closeDrawer();
+    closeDrawer();
     router.push(url as never);
   };
 
@@ -85,13 +100,13 @@ export function AppDrawerContent(props: DrawerContentComponentProps) {
               fontWeight: t.fontWeight.semibold,
             }}
           >
-            GreenMatrix
+            ZoneMatrix
           </Text>
           <Text
             numberOfLines={1}
             style={{ color: t.colors.mutedForeground, fontSize: t.fontSize.xs }}
           >
-            farm automation system
+            automation system
           </Text>
         </View>
       </View>
@@ -157,14 +172,22 @@ export function AppDrawerContent(props: DrawerContentComponentProps) {
           gap: 2,
         }}
       >
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: t.spacing.sm,
-            paddingHorizontal: t.spacing.md,
-            paddingBottom: t.spacing.sm,
-          }}
+
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => navigate('/usage/profile')}
+          style={({ pressed }) => [
+            {
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: t.spacing.sm,
+              paddingHorizontal: t.spacing.md,
+              paddingVertical: t.spacing.md - 2,
+              borderRadius: t.radius.md,
+              backgroundColor: pressed ? t.colors.sidebarAccent : 'transparent',
+            },
+          ]}
         >
           <View
             style={{
@@ -195,32 +218,14 @@ export function AppDrawerContent(props: DrawerContentComponentProps) {
               {user?.email ?? ''}
             </Text>
           </View>
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => navigate('/usage/profile')}
-          style={({ pressed }) => [
-            {
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: t.spacing.sm,
-              paddingHorizontal: t.spacing.md,
-              paddingVertical: t.spacing.md - 2,
-              borderRadius: t.radius.md,
-              backgroundColor: pressed ? t.colors.sidebarAccent : 'transparent',
-            },
-          ]}
-        >
-          <Ionicons name="person-outline" size={17} color={t.colors.mutedForeground} />
-          <Text style={{ color: t.colors.sidebarForeground, fontSize: t.fontSize.sm }}>Profile</Text>
         </Pressable>
 
         <Pressable
           accessibilityRole="button"
           onPress={() => {
             Haptics.medium();
-            props.navigation.closeDrawer();
+            // The auth gate unmounts the drawer as soon as logout() runs, so
+            // there is no need to dispatch a close action first.
             logout();
           }}
           style={({ pressed }) => [

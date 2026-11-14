@@ -65,6 +65,13 @@ function resolveApiUrl() {
 
 export const API_URL = resolveApiUrl();
 
+/** Resolve a server-relative asset path (e.g. /uploads/frames/x.jpg) to a full URL. */
+export function assetUrl(path?: string | null): string | undefined {
+  if (!path) return undefined;
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_URL}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
 export class ApiError extends Error {
   status: number;
   body: unknown;

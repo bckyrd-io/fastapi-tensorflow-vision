@@ -1,4 +1,4 @@
-"""PostgreSQL access layer for the AquaMonitor FastAPI backend.
+"""PostgreSQL access layer for the ZoneMatrix FastAPI backend.
 
 This is a 1:1 Python port of ``green-matrix/lib/database.js`` so that SQL
 semantics stay identical to the Next.js API it replaces:
@@ -27,9 +27,11 @@ from psycopg2.extras import RealDictCursor
 # Tables whose INSERT statements receive an automatic ``RETURNING id``.
 SERIAL_TABLES = {
     "alerts",
-    "feeding_logs",
-    "feeding_schedules",
+    "captured_frames",
     "sensor_readings",
+    "stage_predictions",
+    "trigger_logs",
+    "trigger_schedules",
     "users",
 }
 
@@ -64,7 +66,7 @@ def _dsn() -> str:
         password=os.environ.get("PGPASSWORD", ""),
         host=os.environ.get("PGHOST", "localhost"),
         port=os.environ.get("PGPORT", "5432"),
-        database=os.environ.get("PGDATABASE", "db_pond"),
+        database=os.environ.get("PGDATABASE", "db_zone"),
     )
 
 

@@ -1,14 +1,15 @@
-"""ESP32 Hardware Simulator (Python port of hardware_esp32/dev_esp32.js).
+"""ESP32 zone/actuator simulator for ZoneMatrix.
 
-Simulates the ESP32 pond monitor without real hardware. Behaviour is a 1:1
-port of the JavaScript simulator: same config constants, same timing, same
-drift ranges, same ACK retry loop.
+Simulates an ESP32 zone monitor without real hardware: it registers a zone,
+streams sensor readings, and executes actuator triggers (fans, doors, pumps)
+queued from the web UI. Same timing/drift behaviour as the original simulator,
+now speaking the zones/triggers API.
 
 Run with:
     .venv\\Scripts\\python.exe simulator.py
 
 Point it at a different backend with SERVER_URL (defaults to the FastAPI
-server URL in .env — the Next.js proxy was removed when the frontend moved to Expo):
+server URL in .env):
     SERVER_URL=http://localhost:8000 .venv\\Scripts\\python.exe simulator.py
 """
 
@@ -43,22 +44,23 @@ def _load_env_file(path: str = ".env") -> None:
 _load_env_file(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 # ============== CONFIG ==============
-SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:3000")
-DEVICE_ID = "ESP32_POND_001"
-POND_ID = "P001"
-POND_NAME = "Main Pond A1"
-POND_LOCATION = "Domasi"
-POND_SIZE = "500"
-POND_DEPTH = "1.5"
-POND_SPECIES = "Chambo"
+SERVER_URL = os.environ.get("SERVER_URL", "http://localhost:8000")
+DEVICE_ID = "ESP32_ZONE_001"
+ZONE_ID = "P001"
+ZONE_NAME = "Greenhouse A1"
+ZONE_LOCATION = "North Sector"
+ZONE_TYPE = "greenhouse"
+ZONE_SIZE = "350"
+ZONE_DEPTH = "3.5"
+ZONE_SUBJECT = "Tomato (Roma)"
 
 SENSOR_INTERVAL_MS = 10000        # 10 seconds
-FEEDING_POLL_INTERVAL_MS = 2000   # 2 seconds
-MIN_FEED_INTERVAL_MS = 30000      # 30 seconds safety
+TRIGGER_POLL_INTERVAL_MS = 2000   # 2 seconds
+MIN_TRIGGER_INTERVAL_MS = 30000   # 30 seconds safety
 
 # ============== SIMULATED STATE ==============
-is_feeding = False
-last_feeding_time = 0  # epoch ms; 0 == never fed (JS sentinel)
+is_triggering = False
+last_trigger_time = 0  # epoch ms; 0 == never triggered (JS sentinel)
 current_temperature = 25.0
 current_humidity = 60.0
 current_ph = 7.0
@@ -103,30 +105,30 @@ def simulate_read_sensors() -> None:
     )
 
 
-# ============== POND REGISTRATION ==============
-def register_pond() -> None:
-    log("POND", "Registering with server...")
+# ============== ZONE REGISTRATION ==============
+def register_zone() -> None:
+    log("ZONE", "Registering with server...")
     try:
         res = requests.post(
-            f"{SERVER_URL}/api/ponds",
+            f"{SERVER_URL}/api/zones",
             json={
-                "id": POND_ID,
-                "name": POND_NAME,
-                "location": POND_LOCATION,
-                "size": POND_SIZE,
-                "depth": POND_DEPTH,
-                "species": POND_SPECIES,
+                "id": ZONE_ID,
+                "name": ZONE_NAME,
+                "location": ZONE_LOCATION,
+                "zone_type": ZONE_TYPE,
+                "subject_name": ZONE_SUBJECT,
+                "size": ZONE_SIZE,
+                "depth": ZONE_DEPTH,
                 "device_id": DEVICE_ID,
-                "is_hardware_registration": True,
             },
             timeout=10,
         )
         if res.status_code in (200, 201):
-            log("POND", "Registered successfully")
+            log("ZONE", "Registered successfully")
         else:
-            log("POND", f"Registration failed. HTTP: {res.status_code}")
+            log("ZONE", f"Registration failed. HTTP: {res.status_code}")
     except Exception as err:  # requests.RequestException and friends
-        log("POND", f"Registration error: {err}")
+        log("ZONE", f"Registration error: {err}")
 
 
 # ============== SENSOR DATA TRANSMISSION ==============
@@ -134,7 +136,7 @@ def send_sensor_data() -> None:
     log("HTTP", "Sending sensor data...")
     payload = {
         "device_id": DEVICE_ID,
-        "pondId": POND_ID,
+        "zoneId": ZONE_ID,
         "temp": current_temperature,
         "ph": current_ph,
         "humidity": current_humidity,
@@ -153,84 +155,89 @@ def send_sensor_data() -> None:
         log("HTTP", f"Send error: {err}")
 
 
-# ============== FEEDING ==============
-def check_for_feeding_commands() -> None:
-    global last_feeding_time
+# ============== ACTUATOR TRIGGERS ==============
+def check_for_triggers() -> None:
+    global last_trigger_time
 
-    if is_feeding:
+    if is_triggering:
         return
 
     now = now_ms()
-    if last_feeding_time > 0 and now - last_feeding_time < MIN_FEED_INTERVAL_MS:
+    if last_trigger_time > 0 and now - last_trigger_time < MIN_TRIGGER_INTERVAL_MS:
         return
 
-    url = f"{SERVER_URL}/api/feeding/pending?pondId={POND_ID}&deviceId={DEVICE_ID}"
+    url = f"{SERVER_URL}/api/triggers/pending?zoneId={ZONE_ID}&deviceId={DEVICE_ID}"
 
     try:
         res = requests.get(url, timeout=10)
         if res.status_code == 200:
             data = res.json()
-            log("FEED POLL", f"Response: {json.dumps(data)}")
+            log("TRIGGER POLL", f"Response: {json.dumps(data)}")
 
             manual = data.get("manualTriggers") or []
-            scheduled = data.get("scheduledFeedings") or []
+            scheduled = data.get("scheduledTriggers") or []
 
             log(
-                "FEED POLL",
+                "TRIGGER POLL",
                 f"Manual triggers: {len(manual)}, Scheduled: {len(scheduled)}",
             )
 
             if manual:
-                record_id = manual[0]["id"]
-                log("FEED", "Manual trigger received. Feeding...")
-                perform_feeding()
-                ack_ok = acknowledge_feeding_complete(record_id, is_schedule=False)
+                trigger = manual[0]
+                record_id = trigger["id"]
+                actuator = trigger.get("actuator_name") or "Actuator"
+                duration = trigger.get("duration_seconds") or 0
+                log("TRIGGER", f"Manual trigger received for {actuator} ({duration}s)...")
+                perform_trigger(actuator, duration)
+                ack_ok = acknowledge_trigger_complete(record_id, is_schedule=False)
                 if not ack_ok:
-                    last_feeding_time = now_ms() + 60000
-                    log("FEED", "Manual ACK failed — extended safety delay applied")
+                    last_trigger_time = now_ms() + 60000
+                    log("TRIGGER", "Manual ACK failed — extended safety delay applied")
             elif scheduled:
-                record_id = scheduled[0]["id"]
-                interval_minutes = scheduled[0]["interval_minutes"]
+                trigger = scheduled[0]
+                record_id = trigger["id"]
+                interval_minutes = trigger.get("interval_minutes")
+                actuator = trigger.get("actuator_name") or "Actuator"
+                duration = trigger.get("duration_seconds") or 0
                 log(
-                    "FEED",
-                    f"Interval schedule triggered (every {interval_minutes} min). Feeding...",
+                    "TRIGGER",
+                    f"Interval schedule triggered for {actuator} "
+                    f"(every {interval_minutes} min, {duration}s)...",
                 )
-                perform_feeding()
-                ack_ok = acknowledge_feeding_complete(record_id, is_schedule=True)
+                perform_trigger(actuator, duration)
+                ack_ok = acknowledge_trigger_complete(record_id, is_schedule=True)
                 if not ack_ok:
-                    last_feeding_time = now_ms() + 60000
-                    log("FEED", "Schedule ACK failed — extended safety delay applied")
+                    last_trigger_time = now_ms() + 60000
+                    log("TRIGGER", "Schedule ACK failed — extended safety delay applied")
             else:
-                log("FEED POLL", "No pending feedings")
+                log("TRIGGER POLL", "No pending triggers")
         else:
-            log("FEED POLL", f"HTTP error: {res.status_code}")
+            log("TRIGGER POLL", f"HTTP error: {res.status_code}")
     except Exception as err:
-        log("FEED POLL", f"Poll error: {err}")
+        log("TRIGGER POLL", f"Poll error: {err}")
 
 
-def perform_feeding() -> None:
-    global is_feeding, last_feeding_time
-    is_feeding = True
-    last_feeding_time = now_ms()
-    log("FEED", "Dispensing feed...")
+def perform_trigger(actuator_name: str, duration_seconds: int) -> None:
+    global is_triggering, last_trigger_time
+    is_triggering = True
+    last_trigger_time = now_ms()
+    log("TRIGGER", f"Activating {actuator_name} for {duration_seconds}s...")
     log("LED", "YELLOW LED ON (simulated)")
 
-    log("SERVO", f"Writing angle {25} (open)")
-    sleep(150)
+    log("RELAY", f"{actuator_name} ON")
+    sleep(min(duration_seconds, 5) * 1000)
 
-    log("SERVO", f"Writing angle {0} (close)")
-    sleep(200)
-
+    log("RELAY", f"{actuator_name} OFF")
     log("LED", "YELLOW LED OFF (simulated)")
-    is_feeding = False
-    log("FEED", "Done. Fish have been fed.")
+    is_triggering = False
+    log("TRIGGER", f"Done. {actuator_name} cycle complete.")
 
 
-def acknowledge_feeding_complete(record_id, is_schedule: bool) -> bool:
-    log("FEED", "Acknowledging completion...")
+def acknowledge_trigger_complete(record_id, is_schedule: bool) -> bool:
+    log("TRIGGER", "Acknowledging completion...")
     payload = {
         "deviceId": DEVICE_ID,
-        "pondId": POND_ID,
+        "zoneId": ZONE_ID,
         "status": "completed",
     }
     if is_schedule:
@@ -239,49 +246,49 @@ def acknowledge_feeding_complete(record_id, is_schedule: bool) -> bool:
         payload["logId"] = record_id
 
     for attempt in range(1, 4):
-        log("FEED", f"ACK Attempt {attempt}/3...")
-        log("FEED", f"ACK Payload: {json.dumps(payload)}")
+        log("TRIGGER", f"ACK Attempt {attempt}/3...")
+        log("TRIGGER", f"ACK Payload: {json.dumps(payload)}")
 
         try:
             res = requests.post(
-                f"{SERVER_URL}/api/feeding/pending", json=payload, timeout=10
+                f"{SERVER_URL}/api/triggers/pending", json=payload, timeout=10
             )
-            log("FEED", f"ACK Response: {res.status_code}")
+            log("TRIGGER", f"ACK Response: {res.status_code}")
             if res.status_code == 200:
                 log(
-                    "FEED",
+                    "TRIGGER",
                     "Acknowledgment successful — server updated last_executed",
                 )
                 return True
         except Exception as err:
-            log("FEED", f"ACK error: {err}")
+            log("TRIGGER", f"ACK error: {err}")
 
-        log("FEED", "ACK failed, retrying in 1 second...")
+        log("TRIGGER", "ACK failed, retrying in 1 second...")
         sleep(1000)
 
-    log("FEED", "ACK FAILED after 3 attempts — will use extended safety delay")
+    log("TRIGGER", "ACK FAILED after 3 attempts — will use extended safety delay")
     return False
 
 
 # ============== MAIN LOOP ==============
 def main() -> None:
-    print("\n=== Pond Monitor ESP32 Simulator Starting ===")
-    print("[VERSION] Using /api/feeding/pending endpoint")
+    print("\n=== ZoneMatrix ESP32 Simulator Starting ===")
+    print("[VERSION] Using /api/triggers/pending endpoint")
     print(f"[CONFIG] Server: {SERVER_URL}")
-    print(f"[CONFIG] Device: {DEVICE_ID} | Pond: {POND_ID}")
+    print(f"[CONFIG] Device: {DEVICE_ID} | Zone: {ZONE_ID}")
 
-    register_pond()
+    register_zone()
     log("SETUP", "Complete")
 
     last_sensor_send = 0
-    last_feeding_poll = 0
+    last_trigger_poll = 0
 
     while True:
         now = now_ms()
 
-        if now - last_feeding_poll >= FEEDING_POLL_INTERVAL_MS:
-            check_for_feeding_commands()
-            last_feeding_poll = now_ms()
+        if now - last_trigger_poll >= TRIGGER_POLL_INTERVAL_MS:
+            check_for_triggers()
+            last_trigger_poll = now_ms()
 
         if now - last_sensor_send >= SENSOR_INTERVAL_MS:
             simulate_read_sensors()

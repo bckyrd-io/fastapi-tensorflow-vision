@@ -1,7 +1,8 @@
 /** Port of app/dashboard/page.tsx (Next.js → Expo) */
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { ScreenScroll } from '@/components/screen';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,14 +18,15 @@ interface Thresholds {
   waterLevel: { min: number; optimal: number; max: number };
 }
 
-/** Pond shape returned by GET /api/ponds (copied from the old ponds page). */
-interface Pond {
+/** Zone shape returned by GET /api/zones. */
+interface Zone {
   id: string;
   name: string;
   location: string;
+  zone_type: string;
+  subject_name: string;
   size_sqm: number;
   depth_m: number;
-  species: string;
   status: string;
   device_id?: string;
   device_name?: string;
@@ -43,16 +45,16 @@ interface Pond {
   water_level_max?: number;
 }
 
-/** Reading item returned by GET /api/sensors/latest (copied from the old ponds page). */
+/** Reading item returned by GET /api/sensors/latest. */
 interface SensorReading {
-  pond_id: string;
+  zone_id: string;
   temperature: number;
   ph: number;
   humidity: number;
   water_level: number;
   device_id: string;
   reading_time: string;
-  pond_name: string;
+  zone_name: string;
   is_online?: boolean;
 }
 
@@ -63,19 +65,19 @@ interface AlertStats {
   acknowledgedToday: number;
 }
 
-interface PondsResponse {
-  ponds?: Pond[];
+interface ZonesResponse {
+  zones?: Zone[];
 }
 
 interface LatestSensorsResponse {
-  ponds?: SensorReading[];
+  zones?: SensorReading[];
 }
 
 interface AlertsResponse {
   stats?: AlertStats;
 }
 
-interface PondConfigsResponse {
+interface ZoneConfigsResponse {
   thresholds?: Thresholds;
 }
 
@@ -90,7 +92,7 @@ interface ThresholdRow {
 
 export default function DashboardScreen() {
   const t = useTheme();
-  const [pondData, setPondData] = useState<Pond[]>([]);
+  const [zoneData, setZoneData] = useState<Zone[]>([]);
   // Sensors are fetched for their mount-guard parity with the port; no UI
   // reads this state, so bind only the setter (hole binding).
   const [, setSensorData] = useState<SensorReading[]>([]);
@@ -99,24 +101,24 @@ export default function DashboardScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const { isAuthenticated } = useAuthStore();
 
-  // Fetch pond, sensor, alert, and threshold data
+  // Fetch zone, sensor, alert, and threshold data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [pondsData, sensorsData, alertsData, thresholdsData] = await Promise.all([
-          apiTry<PondsResponse>('/api/ponds'),
+        const [zonesData, sensorsData, alertsData, thresholdsData] = await Promise.all([
+          apiTry<ZonesResponse>('/api/zones'),
           apiTry<LatestSensorsResponse>('/api/sensors/latest'),
           apiTry<AlertsResponse>('/api/alerts?status=active&limit=1'),
-          apiTry<PondConfigsResponse>('/api/pond-configs?aggregate=true'),
+          apiTry<ZoneConfigsResponse>('/api/zone-configs?aggregate=true'),
         ]);
 
         // The old page awaited all four fetches inside one try/catch, so a
         // failure anywhere skipped the whole update — keep that behaviour and
         // let the next 5s poll retry.
-        if (!pondsData || !sensorsData || !alertsData || !thresholdsData) return;
+        if (!zonesData || !sensorsData || !alertsData || !thresholdsData) return;
 
-        setPondData(pondsData.ponds || []);
-        setSensorData(sensorsData.ponds || []);
+        setZoneData(zonesData.zones || []);
+        setSensorData(sensorsData.zones || []);
         setAlertCount(alertsData.stats?.totalActive || 0);
 
         if (thresholdsData.thresholds) {
@@ -138,8 +140,8 @@ export default function DashboardScreen() {
   }, [isAuthenticated]);
 
   // Calculate dynamic counts
-  const activePondCount = pondData.filter((p) => p.status === 'active').length;
-  const inactivePondCount = pondData.filter((p) => p.status === 'inactive').length;
+  const activeZoneCount = zoneData.filter((z) => z.status === 'active').length;
+  const inactiveZoneCount = zoneData.filter((z) => z.status === 'inactive').length;
 
   const thresholdRows: ThresholdRow[] = thresholds
     ? [
@@ -204,7 +206,7 @@ export default function DashboardScreen() {
                 >
                   Active Zones
                 </Text>
-                <Ionicons name="water" size={16} color={t.colors.primary} />
+                <Ionicons name="map" size={16} color={t.colors.primary} />
               </CardHeader>
               <CardContent style={{ paddingTop: 0 }}>
                 <Text
@@ -214,10 +216,10 @@ export default function DashboardScreen() {
                     fontWeight: t.fontWeight.bold,
                   }}
                 >
-                  {activePondCount}
+                  {activeZoneCount}
                 </Text>
                 <Text style={{ color: t.colors.mutedForeground, fontSize: t.fontSize.xs }}>
-                  {inactivePondCount} inactive
+                  {inactiveZoneCount} inactive
                 </Text>
               </CardContent>
             </Card>
@@ -259,10 +261,53 @@ export default function DashboardScreen() {
             </Card>
           </View>
 
-          {pondData.length === 0 ? (
+          {/* Reports is a dashboard sub-screen; this is its entry point. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open reports and analytics"
+            onPress={() => router.push('/reports' as never)}
+            style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+          >
+            <Card>
+              <CardHeader
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <View style={{ flex: 1, gap: 2 }}>
+                  <CardTitle>Reports &amp; Analytics</CardTitle>
+                  <CardDescription>
+                    Trend analysis, summary statistics and PDF export
+                  </CardDescription>
+                </View>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: t.spacing.xs,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: t.colors.primary,
+                      fontSize: t.fontSize.sm,
+                      fontWeight: t.fontWeight.medium,
+                    }}
+                  >
+                    View
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color={t.colors.primary} />
+                </View>
+              </CardHeader>
+            </Card>
+          </Pressable>
+
+          {zoneData.length === 0 ? (
             <EmptyState
               compact
-              icon="water-outline"
+              icon="map-outline"
               title="No zones yet"
               description="Add a zone to start tracking its sensors."
             />

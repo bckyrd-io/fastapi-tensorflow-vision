@@ -1,5 +1,5 @@
 /**
- * Design tokens for GreenMatrix (AquaMonitor farm automation).
+ * Design tokens for ZoneMatrix.
  * Colors are ported 1:1 from the original Next.js app's globals.css
  * (shadcn/ui oklch tokens converted to hex) so the Expo app matches the old UI.
  *

@@ -19,7 +19,7 @@ export const Haptics = {
   medium() {
     fire(ExpoHaptics.impactAsync(ExpoHaptics.ImpactFeedbackStyle.Medium));
   },
-  /** Positive result (login ok, feed triggered, saved). */
+  /** Positive result (login ok, trigger fired, saved). */
   success() {
     fire(ExpoHaptics.notificationAsync(ExpoHaptics.NotificationFeedbackType.Success));
   },

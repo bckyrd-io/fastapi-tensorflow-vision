@@ -1,7 +1,7 @@
 /**
  * Login screen (route "/" — port of app/page.tsx + components/login-form.tsx).
  */
-import { Link, router } from 'expo-router';
+import { Link } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -13,7 +13,7 @@ import {
 
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
-import { Field, FieldGroup, Input } from '@/components/ui/input';
+import { FieldGroup, Input } from '@/components/ui/input';
 import { useToast } from '@/components/toast';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuthStore } from '@/stores/authStore';
@@ -35,8 +35,9 @@ export default function LoginScreen() {
     try {
       const success = await login(formData.username, formData.password);
       if (success) {
+        // The auth gate in the root layout swaps to the `(app)` group, whose
+        // `launcher` route redirects to the role-appropriate screen.
         toast.success('Login successful!');
-        router.replace('/dashboard');
       } else {
         toast.error('Invalid username or password');
       }
@@ -72,7 +73,7 @@ export default function LoginScreen() {
                   textAlign: 'center',
                 }}
               >
-                GREEN MATRIX
+                ZONE MATRIX
               </Text>
             </View>
 

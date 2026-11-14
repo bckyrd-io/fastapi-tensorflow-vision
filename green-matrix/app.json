@@ -1,21 +1,26 @@
 {
   "expo": {
-    "name": "GreenMatrix",
-    "slug": "greenmatrix",
+    "name": "Green Matrix",
+    "slug": "green-matrix",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "greenmatrix",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.greenmatrix.app",
+      "icon": "./assets/images/icon.png"
     },
     "android": {
+      "package": "com.greenmatrix.app",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "output": "server",
@@ -31,7 +36,15 @@
           "imageWidth": 96
         }
       ],
-      "expo-sharing"
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Green Matrix to access camera for plant growth stage detection."
+        }
+      ],
+      "expo-sharing",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

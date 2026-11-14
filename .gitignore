@@ -39,6 +39,9 @@ yarn-error.*
 __pycache__/
 *.pyc
 
+# runtime artifacts
+uploads/
+
 # typescript
 *.tsbuildinfo
 

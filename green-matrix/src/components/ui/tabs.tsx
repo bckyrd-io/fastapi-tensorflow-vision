@@ -1,5 +1,5 @@
 /**
- * Tabs — segmented control matching shadcn Tabs (used on pond-config and
+ * Tabs — segmented control matching shadcn Tabs (used on zone-config and
  * alerts). Controlled by the screen, animated with native press states.
  */
 import { Pressable, ScrollView, Text, View, type ViewStyle } from 'react-native';

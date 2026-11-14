@@ -298,14 +298,7 @@ export default function UsageScreen() {
           >
             {u.is_active ? 'Disable' : 'Enable'}
           </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            icon="trash-outline"
-            onPress={() => deleteUser(u.id)}
-          >
-            Delete
-          </Button>
+          
         </View>
       ),
     },

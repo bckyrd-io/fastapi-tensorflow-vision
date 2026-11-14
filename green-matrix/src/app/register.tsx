@@ -15,7 +15,7 @@ import {
 import { Logo } from '@/components/logo';
 import { useToast } from '@/components/toast';
 import { Button } from '@/components/ui/button';
-import { Field, FieldGroup, Input } from '@/components/ui/input';
+import { FieldGroup, Input } from '@/components/ui/input';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError, apiFetch } from '@/lib/api';
 
@@ -75,7 +75,7 @@ export default function RegisterScreen() {
         <View style={{ width: '100%', maxWidth: 400, alignSelf: 'center', gap: t.spacing.xl }}>
           <FieldGroup>
             <View style={{ alignItems: 'center', gap: t.spacing.sm }}>
-              
+              <Logo size={56} />
               <Text
                 style={{
                   color: t.colors.foreground,

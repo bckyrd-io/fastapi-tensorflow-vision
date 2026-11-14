@@ -1,98 +1,125 @@
-# fastapi-green-matrix
+# ZoneMatrix
 
-AquaMonitor / GreenMatrix — smart farm automation (ponds, greenhouses, animal
-kraals/pens). The UI in `green-matrix/` is now a **React Native Expo (SDK 58)**
-app (converted from Next.js, following Code with Beto's conventions and
-docs.expo.dev); it talks directly to the **FastAPI**
-backend at the repository root. The original Next.js API routes were ported to
-Python 1:1 and removed after passing parity and end-to-end tests. The ESP32
-hardware simulator is Python too. The UI says "zone" where the original said
-"pond"; the API and DB keep their original `ponds` schema.
+ZoneMatrix — smart farm automation for **zones** (greenhouses, ponds, pens and
+kraals). The UI in `green-matrix/` is a **React Native Expo (SDK 58)** app with
+Expo Router; it talks directly to the **FastAPI** backend at the repository
+root, which stores everything in PostgreSQL database **`db_zone`**. The ESP32
+simulator and firmware use the same API.
 
 ```
-Expo app (web :8081 / Expo Go)  --/api/* via EXPO_PUBLIC_API_URL-->  FastAPI (:8000)  -->  PostgreSQL db_pond
-ESP32 simulator (simulator.py)  -------------------------------------/api/*-----------^
+Expo app (web :8081 / Expo Go) --EXPO_PUBLIC_API_URL (/api/*)--> FastAPI (:8000) --> PostgreSQL db_zone
+ESP32 / simulator (simulator.py) ------------------------------/api/*------------^
 ```
+
+> **Terminology:** everything is a **zone** (`zone_id`, `/api/zones`). The
+> value `zone_type = 'pond'` is kept on purpose — a pond is one *kind* of zone,
+> like `greenhouse`, `pen_kraal` or `custom`. Actuator work (fans, doors,
+> pumps, aerators) is handled by **triggers**, not "feeding".
 
 ## Layout
 
 | Path | What it is |
 |---|---|
 | `main.py` | FastAPI entrypoint (all `/api/*` routers, port 8000) |
-| `api/` | Routers ported from `green-matrix/app/api` + `db.py` (mirrors `lib/database.js`) |
-| `simulator.py` | Python port of the JS ESP32 simulator (`dev_esp32.js`) |
-| `requirements.txt`, `.env` | Python deps and DB/`SERVER_URL` config |
-| `green-matrix/` | Expo frontend (SDK 58 + Expo Router; `EXPO_PUBLIC_API_URL` points at :8000) |
-| `green-matrix/hardware_esp32/hardware_esp32.ino` | Real ESP32 firmware (unchanged) |
-| `legacy-plant-app/` | The previous root application, moved aside unchanged |
+| `api/` | Routers and `db.py` (PostgreSQL access layer) |
+| `api/triggers.py` | Actuator triggers: history, pending queue, presets, schedules, states |
+| `api/vision.py` | AI growth-stage capture + human validation |
+| `migrate_to_zones.py` | One-shot, idempotent `ponds/feeding → zones/triggers` migration |
+| `simulator.py` | ESP32 zone simulator (sensors + actuator triggers) |
+| `requirements.txt`, `.env` | Python deps and DB / `SERVER_URL` config |
+| `green-matrix/` | Expo frontend (SDK 58 + Expo Router) |
+| `green-matrix/database/db_zone.sql` | Fresh schema + seed users/zones |
+| `green-matrix/hardware_esp32/hardware_esp32.ino` | ESP32 firmware |
+| `models/` | `growth_stage_model.h5` used by the vision router |
 
 ## Run it
 
-### One-command local startup
+### 1. Database (once)
 
-From the repo root:
+```powershell
+psql -U postgres -c "CREATE DATABASE db_zone;"
+psql -U postgres -d db_zone -f green-matrix/database/db_zone.sql
+```
+
+Seed logins: `admin` / `operator` / `viewer`, password `admin123`.
+
+Upgrading an existing ponds/feeding database instead? Rename the DB and run the
+migration (idempotent):
+
+```powershell
+psql -U postgres -d postgres -c "ALTER DATABASE db_pond RENAME TO db_zone;"
+.\.venv\Scripts\python.exe migrate_to_zones.py
+```
+
+### 2. FastAPI backend (repo root)
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\start-dev.ps1
+.\.venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-This script:
-- starts the FastAPI backend on `0.0.0.0:8000`
-- writes the current machine LAN IP into `green-matrix/.env`
-- starts the Expo web app in the same command
+### 3. Expo UI (second terminal)
 
-### Manual startup
-
-```bash
-# 1. database (once)
-psql -U postgres -c "CREATE DATABASE db_pond;"
-psql -U postgres -d db_pond -f green-matrix/database/db_pond.sql
-# seed users: admin / operator / viewer, password admin123
-
-# 2. FastAPI backend (repo root)
-py -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-.venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000
-
-# 3. Expo UI (second terminal, green-matrix/)
+```powershell
 cd green-matrix
 npm install
-npm run web             # browser  -> http://localhost:8081
-npx expo start          # QR code  -> scan with Expo Go (set EXPO_PUBLIC_API_URL in .env
-                        #            to your LAN IP for a physical device)
-
-# 4. hardware simulator (third terminal, repo root)
-npm run simulator      # from green-matrix/, or: .venv\Scripts\python.exe simulator.py
+npm run web             # browser -> http://localhost:8081
+npx expo start          # QR code -> Expo Go (set EXPO_PUBLIC_API_URL to your LAN IP)
 ```
+
+### 4. Simulator (third terminal, repo root)
+
+```powershell
+.\.venv\Scripts\python.exe simulator.py
+# or from green-matrix/: npm run simulator
+```
+
+The simulator registers `P001` ("Greenhouse A1", `zone_type = greenhouse`),
+streams sensor readings, and executes manual/scheduled actuator triggers.
 
 ## Configuration
 
 `.env` (repo root, read by FastAPI and the simulator):
 
 ```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/db_pond
-SERVER_URL=http://localhost:8000   # simulator target (FastAPI directly)
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/db_zone
+PGDATABASE=db_zone
+SERVER_URL=http://localhost:8000
 HOST=0.0.0.0
 PORT=8000
 ```
 
-## Tests used for the migration
+`green-matrix/.env` (Expo app):
 
-- **Parity diff**: 31/31 GET endpoints returned byte-identical JSON
-  (old TS API on :3000 vs FastAPI on :8000), including node-postgres
-  quirks — NUMERIC and int8 as strings, ISO-8601 UTC timestamps, JS
-  `toFixed` rounding.
-- **E2E suite**: 17/17 checks (login, pond registration, sensor ingest,
-  history, thresholds/alerts, manual + scheduled feeding with device ACKs,
-  schedules, reports, users).
-- **Simulator**: Python simulator registered the pond, streamed readings
-  (`device_id=ESP32_POND_001`), and executed manual and 1-minute scheduled
-  feedings with successful ACKs.
+```env
+EXPO_PUBLIC_API_URL=http://192.168.1.105:8000
+```
 
-## Known quirks (kept from the original on purpose)
+## API quick reference
 
-- `GET /api/auth/me` returns the first active user for any `Bearer` token.
-- Identical sensor alerts are **not** deduplicated — a drifting sensor can
-  raise repeated alerts, exactly as before.
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/auth/login` | Session login |
+| `GET/POST/PUT/DELETE` | `/api/zones` | Zone list / create / update / deactivate |
+| `GET/PUT` | `/api/zone-configs` | Per-zone thresholds + device metadata |
+| `GET/POST` | `/api/sensors`, `/api/sensors/latest`, `/api/sensors/history` | Readings |
+| `GET/POST` | `/api/triggers` | Trigger history, manual run, disable schedules |
+| `GET/POST` | `/api/triggers/pending` | Device work queue + completion ACK |
+| `GET/PUT/POST` | `/api/triggers/schedules`, `/presets`, `/states` | Schedules/presets |
+| `GET/POST/PUT/DELETE` | `/api/alerts` | Alert feed and acknowledgements |
+| `GET` | `/api/reports/stats` | Aggregated readings |
+| `POST` | `/api/zones/{zone_id}/capture` | AI vision prediction |
+| `POST` | `/api/zones/vision/predictions/{id}/validate` | Human validation |
+
+`zoneId` is accepted (camelCase) by device-facing endpoints; `zone_id` works on
+query strings too. All payloads and rows use `zone_id` / `zone_name`.
+
+## Verification
+
+- `npx tsc --noEmit` and `npx expo lint` in `green-matrix/`
+- API smoke: `/api/health`, `/api/zones`, `/api/sensors/latest`, `/api/triggers`,
+  `/api/alerts`, `/api/reports/stats`
+- `test_vision_pipeline.py` for the OpenCV + Keras inference path
+- Simulator: zone registration, sensor ingest, manual and scheduled triggers
+  with device ACKs
