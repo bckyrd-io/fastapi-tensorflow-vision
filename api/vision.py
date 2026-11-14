@@ -20,7 +20,6 @@ from typing import Optional
 
 import cv2
 import numpy as np
-import tf_keras as keras
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
@@ -43,6 +42,12 @@ class ModelEngine:
     @classmethod
     def get_model(cls):
         if cls._model is None:
+            # tf_keras pulls in TensorFlow (~30s import, hundreds of MB RSS), so
+            # it is imported only when a capture actually needs inference. That
+            # keeps API boot fast and lets the service start within the memory
+            # budget of a small Render instance.
+            import tf_keras as keras
+
             model_path = os.path.join("models", "growth_stage_model.h5")
             print(f"[AI Vision] Loading growth stage model from: {model_path}...")
             cls._model = keras.models.load_model(model_path, compile=False)

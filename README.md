@@ -24,12 +24,12 @@ ESP32 / simulator (simulator.py) ------------------------------/api/*-----------
 | `api/` | Routers and `db.py` (PostgreSQL access layer) |
 | `api/triggers.py` | Actuator triggers: history, pending queue, presets, schedules, states |
 | `api/vision.py` | AI growth-stage capture + human validation |
-| `migrate_to_zones.py` | One-shot, idempotent `ponds/feeding → zones/triggers` migration |
 | `simulator.py` | ESP32 zone simulator (sensors + actuator triggers) |
 | `requirements.txt`, `.env` | Python deps and DB / `SERVER_URL` config |
+| `schema.sql`, `init_db.py` | Cloud schema + seed rows, applied idempotently on deploy |
+| `render.yaml` | Render Blueprint: `zonematrix-api` (web) + `zonematrix-db` (Postgres) |
 | `green-matrix/` | Expo frontend (SDK 58 + Expo Router) |
-| `green-matrix/database/db_zone.sql` | Fresh schema + seed users/zones |
-| `green-matrix/hardware_esp32/hardware_esp32.ino` | ESP32 firmware |
+| `hardware_esp32/` | ESP32 firmware |
 | `models/` | `growth_stage_model.h5` used by the vision router |
 
 ## Run it
@@ -37,19 +37,14 @@ ESP32 / simulator (simulator.py) ------------------------------/api/*-----------
 ### 1. Database (once)
 
 ```powershell
-psql -U postgres -c "CREATE DATABASE db_zone;"
-psql -U postgres -d db_zone -f green-matrix/database/db_zone.sql
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -c "import psycopg2; c=psycopg2.connect('host=localhost user=postgres password=postgres'); c.autocommit=True; c.cursor().execute('CREATE DATABASE db_zone')"
+.\.venv\Scripts\python.exe init_db.py     # applies schema.sql (DDL + seeds)
 ```
 
 Seed logins: `admin` / `operator` / `viewer`, password `admin123`.
-
-Upgrading an existing ponds/feeding database instead? Rename the DB and run the
-migration (idempotent):
-
-```powershell
-psql -U postgres -d postgres -c "ALTER DATABASE db_pond RENAME TO db_zone;"
-.\.venv\Scripts\python.exe migrate_to_zones.py
-```
+`init_db.py` is idempotent — Render runs it before every deploy.
 
 ### 2. FastAPI backend (repo root)
 
@@ -77,6 +72,52 @@ npx expo start          # QR code -> Expo Go (set EXPO_PUBLIC_API_URL to your LA
 
 The simulator registers `P001` ("Greenhouse A1", `zone_type = greenhouse`),
 streams sensor readings, and executes manual/scheduled actuator triggers.
+
+## Deploy
+
+### 1. Render — FastAPI + PostgreSQL
+
+`render.yaml` at the repo root is a Render Blueprint that creates both pieces:
+
+| Resource | Name | Plan |
+|---|---|---|
+| Web service (Python) | `zonematrix-api` → `https://zonematrix-api.onrender.com` | free |
+| PostgreSQL | `zonematrix-db` (db `db_zone`, user `postgres`) | free |
+
+Steps:
+
+1. Push this repository to GitHub (the Blueprint is read from the repo root).
+2. Render dashboard → **New → Blueprint** → connect the repo → **Apply**.
+   Render provisions both resources and wires `DATABASE_URL` automatically.
+3. `preDeployCommand: python init_db.py` applies `schema.sql` (11 tables +
+   seed users/zones/configs) before every deploy — safe to re-run.
+4. Smoke test:
+   `https://zonematrix-api.onrender.com/api/health` → `{"success":true,"database":"up"}`
+   and log in with `admin` / `admin123`.
+
+Gotchas on the free tier:
+
+- **Free Postgres expires 30 days after creation** (then a 14-day grace period,
+  then the data is deleted) — upgrade the database plan to keep it.
+- The web service spins down when idle: the first request after ~15 min takes
+  30–60 s to warm up.
+- `uploads/` (captured camera frames) is ephemeral — files are lost on redeploy.
+- The vision endpoint loads TensorFlow on first use (~60 s) and needs more than
+  512 MB; if `/api/zones/{id}/capture` crashes the instance, move the service
+  to a paid plan (everything else runs fine on free).
+
+### 2. EAS — Android APK
+
+```powershell
+cd green-matrix
+npx eas-cli@latest login
+npx eas-cli@latest init            # creates/links the Expo project (writes projectId)
+npm run build:android:preview      # signed APK (buildType: apk)
+```
+
+The `preview` profile bakes `EXPO_PUBLIC_API_URL=https://zonematrix-api.onrender.com`
+into the bundle (see `eas.json`); install the APK from the build link in the
+EAS dashboard. `npm run build:android` produces the Play-Store AAB.
 
 ## Configuration
 
