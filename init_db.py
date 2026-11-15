@@ -1,16 +1,18 @@
 """Idempotent database bootstrap for ZoneMatrix.
 
 Applies ``schema.sql`` (DDL + seed rows) to the database named by
-``DATABASE_URL``. Render runs this as the service's ``preDeployCommand``,
-so it executes before every deploy and must be safe to re-run:
+``DATABASE_URL``. It executes on API boot when ``DB_INIT_ON_START`` is set
+(the Render Blueprint sets it, because ``preDeployCommand`` is not available
+on Render's free tier), and it must be safe to re-run:
 
   * every DDL statement uses ``IF NOT EXISTS``;
   * seed rows use ``ON CONFLICT DO NOTHING``;
   * identity sequences are pushed past any seeded ids afterwards.
 
 Usage:
-    python init_db.py            # uses DATABASE_URL / PG* from the environment
-    python init_db.py --check    # only verify connectivity, apply nothing
+    python init_db.py             # apply once (local/manual bootstrap)
+    python init_db.py --retries 10
+    python init_db.py --check     # only verify connectivity, apply nothing
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 
 import psycopg2
 from psycopg2 import sql
@@ -122,12 +125,72 @@ def advance_identity_sequences(conn: psycopg2.extensions.connection) -> None:
             cur.execute(statement, (table_name, column_name))
 
 
+def apply(dsn: str | None = None) -> None:
+    """Apply schema.sql to the database. Idempotent; raises on failure."""
+    dsn = dsn or db._dsn()
+    with open(SCHEMA_PATH, encoding="utf-8") as handle:
+        statements = split_statements(handle.read())
+
+    conn = psycopg2.connect(dsn, connect_timeout=15)
+    try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            for statement in statements:
+                cur.execute(statement)
+            advance_identity_sequences(conn)
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                  (SELECT count(*) FROM users)        AS users,
+                  (SELECT count(*) FROM zones)        AS zones,
+                  (SELECT count(*) FROM zone_configs) AS zone_configs
+                """
+            )
+            users, zones, zone_configs = cur.fetchone()
+        print(
+            f"[init_db] applied {len(statements)} statements; ready: "
+            f"{users} users, {zones} zones, {zone_configs} zone_configs"
+        )
+    finally:
+        conn.close()
+
+
+def apply_with_retries(dsn: str | None = None, attempts: int = 10, delay: float = 5.0) -> bool:
+    """Retry ``apply()`` until it succeeds (a freshly created Render Postgres
+    can lag behind the first boot). Returns True on success."""
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            apply(dsn)
+            return True
+        except Exception as exc:  # noqa: BLE001 - report and retry
+            last_error = exc
+            print(
+                f"[init_db] attempt {attempt}/{attempts} failed: {exc}",
+                flush=True,
+            )
+            if attempt < attempts:
+                import time
+
+                time.sleep(delay)
+    print(f"[init_db] giving up: {last_error}", flush=True)
+    return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--check",
         action="store_true",
         help="verify connectivity only; do not apply schema.sql",
+    )
+    parser.add_argument(
+        "--retries",
+        type=int,
+        default=1,
+        help="apply attempts (the API startup path uses 10)",
     )
     args = parser.parse_args()
 
@@ -136,51 +199,25 @@ def main() -> int:
     safe_dsn = dsn.split("@")[-1] if "@" in dsn else dsn
     print(f"[init_db] connecting to {safe_dsn}")
 
-    try:
-        conn = psycopg2.connect(dsn, connect_timeout=15)
-    except Exception as exc:  # noqa: BLE001 - report and fail the deploy
-        print(f"[init_db] connection failed: {exc}", file=sys.stderr)
-        return 1
-
-    try:
-        if args.check:
+    if args.check:
+        try:
+            conn = psycopg2.connect(dsn, connect_timeout=15)
+        except Exception as exc:  # noqa: BLE001 - report and fail the deploy
+            print(f"[init_db] connection failed: {exc}", file=sys.stderr)
+            return 1
+        try:
             with conn.cursor() as cur:
                 cur.execute("SELECT version()")
                 print(f"[init_db] ok: {cur.fetchone()[0][:60]}...")
-            return 0
-
-        with open(SCHEMA_PATH, encoding="utf-8") as handle:
-            statements = split_statements(handle.read())
-
-        conn.autocommit = True
-        with conn.cursor() as cur:
-            for index, statement in enumerate(statements, start=1):
-                cur.execute(statement)
-            advance_identity_sequences(conn)
-
-        print(f"[init_db] applied {len(statements)} statements from schema.sql")
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                  (SELECT count(*) FROM users)      AS users,
-                  (SELECT count(*) FROM zones)      AS zones,
-                  (SELECT count(*) FROM zone_configs) AS zone_configs
-                """
-            )
-            users, zones, zone_configs = cur.fetchone()
-        print(
-            f"[init_db] ready: {users} users, {zones} zones, "
-            f"{zone_configs} zone_configs"
-        )
+        finally:
+            conn.close()
         return 0
-    except psycopg2.Error as exc:
-        print(f"[init_db] failed: {exc}", file=sys.stderr)
-        if getattr(exc, "pgcode", None):
-            print(f"[init_db] sqlstate: {exc.pgcode}", file=sys.stderr)
+
+    ok = apply_with_retries(dsn, attempts=max(1, args.retries))
+    if not ok:
+        print("[init_db] schema bootstrap failed", file=sys.stderr)
         return 1
-    finally:
-        conn.close()
+    return 0
 
 
 if __name__ == "__main__":

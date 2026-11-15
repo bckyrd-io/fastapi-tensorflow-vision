@@ -26,7 +26,7 @@ ESP32 / simulator (simulator.py) ------------------------------/api/*-----------
 | `api/vision.py` | AI growth-stage capture + human validation |
 | `simulator.py` | ESP32 zone simulator (sensors + actuator triggers) |
 | `requirements.txt`, `.env` | Python deps and DB / `SERVER_URL` config |
-| `schema.sql`, `init_db.py` | Cloud schema + seed rows, applied idempotently on deploy |
+| `schema.sql`, `init_db.py` | Schema + seed rows, applied idempotently on boot |
 | `render.yaml` | Render Blueprint: `zonematrix-api` (web) + `zonematrix-db` (Postgres) |
 | `green-matrix/` | Expo frontend (SDK 58 + Expo Router) |
 | `hardware_esp32/` | ESP32 firmware |
@@ -44,7 +44,8 @@ py -m venv .venv
 ```
 
 Seed logins: `admin` / `operator` / `viewer`, password `admin123`.
-`init_db.py` is idempotent — Render runs it before every deploy.
+`init_db.py` is idempotent — the deployed API applies it on boot too
+(`DB_INIT_ON_START=1`), because Render free-tier has no pre-deploy hook.
 
 ### 2. FastAPI backend (repo root)
 
@@ -82,15 +83,17 @@ streams sensor readings, and executes manual/scheduled actuator triggers.
 | Resource | Name | Plan |
 |---|---|---|
 | Web service (Python) | `zonematrix-api` → `https://zonematrix-api.onrender.com` | free |
-| PostgreSQL | `zonematrix-db` (db `db_zone`, user `postgres`) | free |
+| PostgreSQL | `zonematrix-db` (db `db_zone`, generated user) | free |
 
 Steps:
 
 1. Push this repository to GitHub (the Blueprint is read from the repo root).
 2. Render dashboard → **New → Blueprint** → connect the repo → **Apply**.
    Render provisions both resources and wires `DATABASE_URL` automatically.
-3. `preDeployCommand: python init_db.py` applies `schema.sql` (11 tables +
-   seed users/zones/configs) before every deploy — safe to re-run.
+3. On boot the API applies `schema.sql` (11 tables + seed users/zones/configs)
+   via `init_db.py` — free-tier services have no pre-deploy hook, so the
+   Blueprint sets `DB_INIT_ON_START=1` and runs it in a background thread with
+   retries. It is idempotent, so every boot/redeploy is safe.
 4. Smoke test:
    `https://zonematrix-api.onrender.com/api/health` → `{"success":true,"database":"up"}`
    and log in with `admin` / `admin123`.

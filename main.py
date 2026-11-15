@@ -10,6 +10,8 @@ EXPO_PUBLIC_API_URL value from green-matrix/.env.
 from __future__ import annotations
 
 import os
+import sys
+import threading
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +30,7 @@ from api import (
     zones,
 )
 from api import db
+from init_db import apply_with_retries
 
 os.makedirs("uploads/frames", exist_ok=True)
 
@@ -61,8 +64,36 @@ app.include_router(alerts.router)
 app.include_router(reports.router)
 
 
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _bootstrap_database() -> None:
+    """Apply schema.sql before traffic hits the API.
+
+    Render's free tier has no ``preDeployCommand``, so the Blueprint sets
+    ``DB_INIT_ON_START=1`` and we run the (idempotent) bootstrap here instead.
+    It runs in a thread so a slow/cold Postgres can never block boot or trip
+    the health check: ``/api/health`` answers 200 with ``database: "down"``
+    until the schema work finishes.
+    """
+    if apply_with_retries(attempts=10, delay=5.0):
+        print("[startup] database schema ready", flush=True)
+    else:
+        print(
+            "[startup] database schema bootstrap FAILED - API queries will "
+            "error until a restart succeeds",
+            file=sys.stderr,
+            flush=True,
+        )
+
+
 @app.on_event("startup")
 def on_startup() -> None:
+    if _env_flag("DB_INIT_ON_START"):
+        threading.Thread(
+            target=_bootstrap_database, name="db-init", daemon=True
+        ).start()
     db.test_connection()
 
 
